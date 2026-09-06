@@ -11,32 +11,34 @@ flowchart TD
     DEV[Developer] -->|Push / Pull Request| GH[GitHub]
 
     GH --> CI[GitHub Actions]
+
     CI --> TEST[Tests and Validation]
     CI --> SCAN[Trivy Security Scan]
     CI --> BUILD[Docker Build]
 
     BUILD --> ECR[Amazon ECR]
 
-    ECR --> CD[Argo CD]
-    GH -->|Desired State| CD
+    GH -->|Desired Kubernetes State| ARGO[Argo CD]
+    ARGO -->|Synchronizes| EKS[Amazon EKS]
 
-    CD --> EKS[Amazon EKS]
+    ECR -->|Container Images| EKS
 
     EKS --> FE[Frontend]
     EKS --> BE[Backend]
 
-    FE --> BE
+    FE -->|API Requests| BE
     BE --> RDS[(Amazon RDS PostgreSQL)]
 
-    TF[Terraform] --> AWS[AWS Infrastructure]
-    AWS --> EKS
-    AWS --> ECR
-    AWS --> RDS
+    TF[Terraform] --> VPC[AWS VPC]
+    TF --> EKS
+    TF --> ECR
+    TF --> RDS
 
-    PROM[Prometheus] --> EKS
-    GRAF[Grafana] --> PROM
-    LOKI[Loki] --> GRAF
-    EKS --> LOKI
+    EKS --> PROM[Prometheus]
+    EKS --> LOKI[Loki]
+
+    PROM --> GRAF[Grafana]
+    LOKI --> GRAF
 ```
 
 The delivery process starts when a change is pushed to GitHub. GitHub Actions validates the application, builds the Docker images, performs vulnerability scanning with Trivy, and publishes approved images to Amazon ECR.
