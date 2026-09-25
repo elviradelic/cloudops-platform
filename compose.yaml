@@ -1,0 +1,35 @@
+services:
+  database:
+    image: postgres:16-alpine
+    container_name: cloudops-database
+    environment:
+      POSTGRES_DB: cloudops_db
+      POSTGRES_USER: cloudops_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudops_user -d cloudops_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: cloudops-backend
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: cloudops_db
+      DB_USER: cloudops_user
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      database:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
