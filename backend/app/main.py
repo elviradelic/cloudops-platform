@@ -30,6 +30,10 @@ def health():
         "status": "healthy"
     }
 
+@app.get("/api/health")
+def health():
+    return {"status": "healthy"}
+
 
 @app.get("/api/status")
 def status():

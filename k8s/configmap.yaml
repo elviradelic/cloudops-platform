@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudops-config
+  namespace: cloudops
+data:
+  APP_ENV: "production"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "cloudops_db"
+  DB_USER: "cloudops_user"
