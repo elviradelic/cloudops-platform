@@ -1,9 +1,10 @@
-import os
 import platform
 import socket
 import time
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from app.config import APP_ENV
 from app.database import check_database_connection
 
@@ -15,6 +16,10 @@ app = FastAPI(
 )
 
 START_TIME = time.time()
+
+
+# Prometheus metrics
+Instrumentator().instrument(app).expose(app)
 
 
 @app.get("/")
@@ -30,9 +35,12 @@ def health():
         "status": "healthy"
     }
 
+
 @app.get("/api/health")
-def health():
-    return {"status": "healthy"}
+def api_health():
+    return {
+        "status": "healthy"
+    }
 
 
 @app.get("/api/status")
@@ -48,6 +56,7 @@ def status():
         "platform": platform.system(),
         "uptime_seconds": uptime_seconds,
     }
+
 
 @app.get("/api/database")
 def database_status():

@@ -3,13 +3,16 @@ kind: Service
 metadata:
   name: backend
   namespace: cloudops
+  labels:
+    app: backend
 
 spec:
   selector:
     app: backend
 
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 8000
       targetPort: 8000
 
