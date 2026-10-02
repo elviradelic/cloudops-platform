@@ -1,159 +1,215 @@
 # CloudOps Platform
 
-CloudOps Platform is a production-oriented DevOps project built around a containerized web application running on AWS. The project demonstrates how application delivery, cloud infrastructure, Kubernetes orchestration, monitoring, security, and deployment automation can work together as a single platform.
+CloudOps Platform is a hands-on DevOps project built around deploying and operating a containerized application in a Kubernetes environment.
 
-The application consists of a React frontend, a FastAPI backend, and PostgreSQL. Application workloads run on Amazon EKS, while the production database is hosted on Amazon RDS. AWS infrastructure is provisioned with Terraform.
+The project started with a simple FastAPI backend and PostgreSQL database and is being expanded step by step with the tools typically used in DevOps and cloud environments.
+
+The current setup includes Docker, Kubernetes, autoscaling, Prometheus and Grafana. The next stages will introduce AWS infrastructure, Terraform, CI/CD, GitOps and additional security and observability tooling.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    DEV[Developer] -->|Push / Pull Request| GH[GitHub]
+The project is being developed toward the following architecture:
 
-    GH --> CI[GitHub Actions]
+```text
+                         GitHub
+                            |
+                     GitHub Actions
+                            |
+                         Trivy
+                            |
+                           ECR
+                            |
+                         Argo CD
+                            |
+                           EKS
+                    /       |       \
+               Backend   Frontend   Monitoring
+                  |                    |
+                 RDS             Prometheus
+                                      |
+                                    Grafana
+                                      |
+                                     Loki
 
-    CI --> TEST[Tests and Validation]
-    CI --> SCAN[Trivy Security Scan]
-    CI --> BUILD[Docker Build]
-
-    BUILD --> ECR[Amazon ECR]
-
-    GH -->|Desired Kubernetes State| ARGO[Argo CD]
-    ARGO -->|Synchronizes| EKS[Amazon EKS]
-
-    ECR -->|Container Images| EKS
-
-    EKS --> FE[Frontend]
-    EKS --> BE[Backend]
-
-    FE -->|API Requests| BE
-    BE --> RDS[(Amazon RDS PostgreSQL)]
-
-    TF[Terraform] --> VPC[AWS VPC]
-    TF --> EKS
-    TF --> ECR
-    TF --> RDS
-
-    EKS --> PROM[Prometheus]
-    EKS --> LOKI[Loki]
-
-    PROM --> GRAF[Grafana]
-    LOKI --> GRAF
+Infrastructure provisioning: Terraform
+Cloud platform: AWS
 ```
 
-The delivery process starts when a change is pushed to GitHub. GitHub Actions validates the application, builds the Docker images, performs vulnerability scanning with Trivy, and publishes approved images to Amazon ECR.
+## Tech Stack
 
-Application deployment follows a GitOps workflow. Argo CD continuously compares the configuration stored in Git with the state of the EKS cluster and synchronizes changes when required. This keeps Git as the source of truth for application deployment and makes configuration drift visible.
+**Application**
+- FastAPI
+- PostgreSQL
+- Python
 
-Terraform manages the AWS infrastructure, including networking, IAM, EKS, ECR, and RDS. Application workloads are deployed to Kubernetes using Helm, while environment-specific configuration is kept separate from the application source code.
+**Containers & Orchestration**
+- Docker
+- Docker Compose
+- Kubernetes
+- Horizontal Pod Autoscaler
+- Ingress
+
+**Monitoring**
+- Prometheus
+- Grafana
+
+**Planned Cloud & DevOps Tooling**
+- AWS
+- Amazon EKS
+- Amazon ECR
+- Amazon RDS
+- Terraform
+- GitHub Actions
+- Argo CD
+- Loki
+- Trivy
+
+## Current Progress
+
+The application can run locally with Docker Compose and has also been deployed to a local Kubernetes cluster.
+
+The Kubernetes setup currently includes separate backend and PostgreSQL workloads, Services, ConfigMaps, Secrets, persistent storage, health checks and resource configuration.
+
+The backend runs with multiple replicas and uses Horizontal Pod Autoscaling to adjust the number of pods based on resource usage.
+
+Monitoring has also been added. The backend exposes application metrics that are collected by Prometheus through a ServiceMonitor.
+
+Grafana is used to visualize the collected metrics.
+
+The current dashboard tracks:
+
+- backend request rate
+- HTTP requests by status
+- backend CPU usage
+- backend memory usage
+- backend replica count
+- HPA current replicas
+- HPA desired replicas
+
+The exported Grafana dashboard is stored in:
+
+```text
+monitoring/grafana-dashboard.json
+```
+
+## Project Structure
+
+```text
+cloudops-platform/
+├── backend/
+├── frontend/
+├── k8s/
+├── monitoring/
+├── docs/
+├── compose.yaml
+├── .env.example
+└── README.md
+```
+
+`backend/` contains the FastAPI application.
+
+`k8s/` contains Kubernetes manifests for the application, database, networking, autoscaling and monitoring integration.
+
+`monitoring/` contains Prometheus configuration and the exported Grafana dashboard.
+
+## Running Locally
+
+Clone the repository:
+
+```bash
+git clone https://github.com/elviradelic/cloudops-platform.git
+cd cloudops-platform
+```
+
+Create the environment file:
+
+```bash
+cp .env.example .env
+```
+
+Then start the application:
+
+```bash
+docker compose up --build
+```
+
+The backend API is available at:
+
+```text
+http://localhost:8000
+```
+
+FastAPI documentation:
+
+```text
+http://localhost:8000/docs
+```
 
 ## Kubernetes
 
-The application runs as multiple Kubernetes workloads rather than as manually managed application processes. Deployments define the desired application state, Services provide stable communication between workloads, and Ingress controls external access to the platform.
+Kubernetes manifests are located in the `k8s` directory.
 
-Application containers define resource requests and limits together with liveness and readiness probes. Kubernetes can therefore distinguish between a failed container and an application instance that is running but temporarily unable to receive traffic.
-
-Horizontal Pod Autoscaler adjusts the number of application replicas as resource utilization changes. Rolling deployments allow new application versions to be introduced without replacing every running instance at once.
-
-Helm is used to package the Kubernetes configuration and provide reusable values for different environments.
-
-## CI/CD and GitOps
-
-Continuous integration is handled by GitHub Actions. Each application change passes through automated validation before a container image can become a deployable artifact.
-
-The pipeline builds Docker images, executes application checks, scans images with Trivy, authenticates with AWS, and publishes successful builds to Amazon ECR. A failed test or unacceptable security finding prevents the affected build from progressing.
-
-Continuous delivery is handled separately through Argo CD. Instead of allowing the CI pipeline to make uncontrolled changes directly to the cluster, the desired deployment state is stored in Git and reconciled by Argo CD.
-
-This separation provides a clear path from source code to container artifact and from declarative configuration to the running Kubernetes workload.
-
-## Infrastructure as Code
-
-AWS infrastructure is managed through Terraform.
-
-The platform uses a dedicated VPC with separated networking for externally accessible and internal resources. Amazon EKS provides the Kubernetes environment, Amazon ECR stores application images, and Amazon RDS provides managed PostgreSQL persistence.
-
-IAM roles and policies are defined with least-privilege access in mind, while security groups control communication between infrastructure components.
-
-Because the infrastructure is represented as code, changes can be reviewed through Terraform plans before being applied and the environment can be reproduced without manually rebuilding resources through the AWS Console.
-
-## Observability
-
-Prometheus collects Kubernetes and application metrics, while Grafana provides dashboards for monitoring the state of the platform. Loki centralizes application and Kubernetes logs and makes them available alongside metrics through Grafana.
-
-The monitoring setup provides visibility into resource consumption, pod availability, application health, request behavior, and failures.
-
-This allows operational problems to be investigated from both metrics and logs instead of relying only on the current state of Kubernetes resources.
-
-## Reliability
-
-The platform is designed to demonstrate several failure and recovery scenarios.
-
-If an application pod fails, Kubernetes restores the desired number of replicas automatically. If demand increases, Horizontal Pod Autoscaler can create additional replicas. During application updates, rolling deployments gradually replace the previous version while healthy instances continue serving traffic.
-
-Application health is exposed through dedicated endpoints:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `/health` | Application health |
-| `/api/status` | Runtime and environment information |
-| `/api/database` | PostgreSQL connectivity |
-
-These checks are also used to distinguish application process availability from actual readiness to receive traffic.
-
-Argo CD provides an additional reliability mechanism at the configuration level. Manual changes that cause the cluster to differ from the desired Git state are detected as configuration drift and can be reconciled back to the declared configuration.
-
-## Security
-
-Security checks are integrated into both the delivery process and the runtime environment.
-
-Container images are scanned with Trivy before deployment. Credentials and environment-specific secrets are kept outside source control, Kubernetes access is restricted through RBAC, and network policies limit unnecessary communication between workloads.
-
-AWS access is controlled through IAM roles and policies rather than embedding cloud credentials in application code.
-
-The objective is to treat security as part of the deployment lifecycle rather than as a separate step performed after the application has already been deployed.
-
-## Technology Stack
-
-| Area | Technology |
-| --- | --- |
-| Cloud | AWS |
-| Infrastructure | Terraform |
-| Containers | Docker |
-| Orchestration | Kubernetes / Amazon EKS |
-| Kubernetes Packaging | Helm |
-| CI | GitHub Actions |
-| GitOps / CD | Argo CD |
-| Container Registry | Amazon ECR |
-| Monitoring | Prometheus, Grafana |
-| Logging | Loki |
-| Security Scanning | Trivy |
-| Backend | Python / FastAPI |
-| Frontend | React |
-| Database | PostgreSQL / Amazon RDS |
-| Automation | Bash |
-
-## Local Development
-
-The backend can be started locally using a Python virtual environment.
+Apply the configuration:
 
 ```bash
-cd backend
-python -m venv venv
-pip install -r requirements.txt
+kubectl apply -f k8s/
 ```
 
-Create `.env` from the provided `.env.example` and configure the local PostgreSQL connection.
+Check the application pods:
 
-On Windows:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-python -m uvicorn app.main:app --reload
+```bash
+kubectl get pods -n cloudops
 ```
 
-The API is then available at `http://127.0.0.1:8000`, with interactive API documentation at `http://127.0.0.1:8000/docs`.
+Check services:
 
-## Purpose
+```bash
+kubectl get services -n cloudops
+```
 
-CloudOps Platform focuses on the operational lifecycle of an application rather than application complexity itself. The application provides the workload, while the primary engineering focus is the infrastructure and automation required to build, deploy, operate, secure, monitor, scale, and recover that workload in a cloud-native environment.
+Check the Horizontal Pod Autoscaler:
+
+```bash
+kubectl get hpa -n cloudops
+```
+
+## Monitoring
+
+Prometheus and Grafana are used to monitor the application and Kubernetes resources.
+
+Application metrics are exposed by the FastAPI backend and discovered by Prometheus using:
+
+```text
+k8s/service-monitor.yaml
+```
+
+The Grafana dashboard configuration is stored in:
+
+```text
+monitoring/grafana-dashboard.json
+```
+
+Prometheus configuration values are stored in:
+
+```text
+monitoring/values.yaml
+```
+
+## Roadmap
+
+The project is still in development.
+
+Next steps include:
+
+- CI/CD pipeline with GitHub Actions
+- AWS infrastructure
+- Infrastructure as Code with Terraform
+- Kubernetes deployment on Amazon EKS
+- container images stored in Amazon ECR
+- PostgreSQL migration to Amazon RDS
+- GitOps deployment with Argo CD
+- centralized logging with Loki
+- container vulnerability scanning with Trivy
+- additional Kubernetes security controls
+
+The README will be updated as these parts are implemented.
