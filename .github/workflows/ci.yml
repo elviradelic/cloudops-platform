@@ -39,4 +39,17 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t cloudops-backend:ci ./backend
+          docker build \
+            -t cloudops-backend:ci \
+            -t cloudops-backend:${{ github.sha }} \
+            ./backend
+
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: "cloudops-backend:ci"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          exit-code: "0"
+          ignore-unfixed: true
