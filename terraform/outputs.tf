@@ -10,3 +10,8 @@ output "public_subnet_ids" {
     aws_subnet.public_2.id
   ]
 }
+
+output "ecr_repository_url" {
+  description = "URL of the backend ECR repository"
+  value       = aws_ecr_repository.backend.repository_url
+}
