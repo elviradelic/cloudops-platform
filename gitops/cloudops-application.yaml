@@ -1,0 +1,21 @@
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudops-platform
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/elviradelic/cloudops-platform.git
+    targetRevision: main
+    path: k8s
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cloudops
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
