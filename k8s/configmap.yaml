@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: cloudops-config
   namespace: cloudops
+  labels:
+    managed-by: argocd
 data:
   APP_ENV: "production"
   DB_HOST: "postgres"
