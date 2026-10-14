@@ -12,3 +12,4 @@ resources:
   - postgres-pvc.yaml
   - hpa.yaml
   - ingress.yaml
+  - sealed-secret.yaml
