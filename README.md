@@ -1,48 +1,56 @@
 # CloudOps Platform
 
-CloudOps Platform is a hands-on DevOps project focused on building, deploying, monitoring, and managing a containerized application using modern infrastructure and automation tools.
+CloudOps Platform is a hands-on DevOps project focused on containerization, Kubernetes orchestration, CI/CD automation, infrastructure management, monitoring, and GitOps.
 
-The project uses a FastAPI backend and PostgreSQL database as the application layer, with Docker and Kubernetes handling containerization and orchestration.
+The application consists of a FastAPI backend and PostgreSQL database, deployed using Docker and Kubernetes.
 
-The platform has been expanded with CI, container security scanning, monitoring, Infrastructure as Code, and GitOps deployment management.
+The project integrates GitHub Actions, GitHub Container Registry (GHCR), Trivy, Prometheus, Grafana, Argo CD, and Bitnami Sealed Secrets.
 
-Development and deployment testing are performed primarily in a local Kubernetes environment. AWS infrastructure is defined using Terraform but has not been provisioned.
+Development, deployment, and infrastructure testing are performed primarily in a local Kubernetes environment. AWS infrastructure is defined using Terraform but has not been provisioned.
 
 ## Architecture
 
 ### Local Kubernetes Environment
 
 ```text
-                   GitHub Repository
-                          |
+                  GitHub Repository
+                         |
                    GitHub Actions
-                    CI + Testing
-                    Docker Build
-                    Trivy Scanning
-                          |
-                    Kubernetes
-                    Manifests
-                          |
+                         |
+                  Tests + Docker Build
+                         |
+                    Trivy Scan
+                         |
+                GitHub Container Registry
+                         |
+                 Versioned Docker Image
+                         |
+              Kubernetes Image Reference
+                         |
                        Argo CD
-                          |
-                 Local Kubernetes
-                  /             \
-           FastAPI Backend    PostgreSQL
-                  |             |
-             API Metrics    Persistent Volume
-                  |
-              Prometheus
-                  |
-               Grafana
+                  (Manual GitOps Sync)
+                         |
+                  Local Kubernetes
+                    /          \
+             FastAPI Backend   PostgreSQL
+               (2 replicas)       |
+                    |        Persistent Volume
+               API Metrics
+                    |
+                Prometheus
+                    |
+                  Grafana
 
 GitHub -> Argo CD -> Sealed Secrets -> Kubernetes Secret
 ```
 
-Argo CD monitors Kubernetes configuration stored in GitHub and detects differences between the repository and the running cluster.
+GitHub Actions handles application testing, container image builds, vulnerability scanning, and publishing to GHCR.
 
-Sealed Secrets enables encrypted application credentials to be stored in Git and decrypted inside the Kubernetes cluster.
+Argo CD monitors Kubernetes configuration stored in GitHub, detects differences between the desired and actual cluster state, and manages application synchronization.
 
-The current GitOps workflow uses manual synchronization to allow changes to be reviewed before deployment.
+Bitnami Sealed Secrets enables encrypted application credentials to be stored in Git and decrypted within the Kubernetes cluster.
+
+The GitOps workflow currently uses manual synchronization, allowing deployment changes to be reviewed before they are applied.
 
 ### AWS Infrastructure
 
@@ -72,8 +80,9 @@ The Terraform configuration has been formatted and validated locally. No AWS res
 - Horizontal Pod Autoscaler
 - Ingress
 
-**CI & Security**
+**CI/CD & Security**
 - GitHub Actions
+- GitHub Container Registry (GHCR)
 - Pytest
 - Trivy
 - Bitnami Sealed Secrets
@@ -94,7 +103,7 @@ The Terraform configuration has been formatted and validated locally. No AWS res
 
 ### Application and Containerization
 
-The backend provides REST API endpoints, application health checks, database connectivity checks, and Prometheus-compatible metrics.
+The FastAPI backend provides REST API endpoints, application health checks, database connectivity checks, and Prometheus-compatible metrics.
 
 Docker is used to package the backend application, while Docker Compose provides a local development environment.
 
@@ -102,22 +111,25 @@ Docker is used to package the backend application, while Docker Compose provides
 
 The local Kubernetes deployment includes:
 
-- FastAPI backend with multiple replicas
+- FastAPI backend with two replicas
 - PostgreSQL database deployment
 - Kubernetes Services
 - ConfigMaps and Secrets
 - PersistentVolumeClaim for PostgreSQL
-- Readiness checks
+- Readiness and liveness probes
 - Horizontal Pod Autoscaler
 - Ingress configuration
+- Versioned container images from GHCR
 
-Kustomize is used to organize the Kubernetes manifests consumed by Argo CD.
+Kustomize organizes the Kubernetes manifests consumed by Argo CD.
 
-### Continuous Integration
+The deployment has been tested successfully with two running backend replicas and a healthy application status.
 
-GitHub Actions runs a CI workflow when changes are pushed to or proposed for the `main` branch.
+### Continuous Integration and Container Registry
 
-The workflow includes:
+GitHub Actions runs automated CI workflows when changes are pushed to or proposed for the `main` branch.
+
+The CI workflow includes:
 
 1. Python environment setup
 2. Dependency installation
@@ -126,9 +138,19 @@ The workflow includes:
 5. Docker image build
 6. Container vulnerability scanning with Trivy
 
-Trivy reports HIGH and CRITICAL vulnerabilities. The current scan is informational and does not block the pipeline.
+Trivy scans for HIGH and CRITICAL vulnerabilities. The scan is currently informational and does not block the pipeline.
 
-Container images are built during CI but are not currently published to a remote registry.
+Backend container images are also published to GitHub Container Registry (GHCR) through the project's container publishing workflow.
+
+Container images are versioned using Git commit identifiers, enabling specific application builds to be referenced by Kubernetes manifests.
+
+**Container registry:**
+
+```text
+ghcr.io/elviradelic/cloudops-platform/cloudops-backend
+```
+
+The local Kubernetes deployment has been successfully updated to use a commit-specific image published to GHCR.
 
 ### Monitoring
 
@@ -154,14 +176,26 @@ monitoring/grafana-dashboard.json
 
 Argo CD manages the Kubernetes application configuration from the GitHub repository.
 
-The GitOps workflow has been tested by:
+The GitOps workflow follows these steps:
 
-1. Updating a Kubernetes manifest
-2. Committing and pushing the change to GitHub
-3. Detecting an OutOfSync state in Argo CD
-4. Reviewing the configuration difference
-5. Performing a manual synchronization
-6. Verifying the updated Kubernetes resource
+1. Application changes are committed and pushed to GitHub.
+2. GitHub Actions builds and tests the application.
+3. A Docker image is published to GHCR.
+4. The Kubernetes Deployment manifest is updated to reference the new image version.
+5. Argo CD detects the configuration change and reports an OutOfSync state.
+6. The configuration difference is reviewed before synchronization.
+7. Argo CD applies the updated Kubernetes configuration.
+8. Deployment health and application availability are verified.
+
+This workflow has been tested successfully, including deployment of a GHCR-hosted backend image to the local Kubernetes cluster.
+
+The resulting deployment was verified with:
+
+- Successful Argo CD synchronization
+- Healthy application status
+- Two available backend replicas
+- Both backend Pods running the expected GHCR image
+- Successful API health check
 
 Automatic synchronization is currently disabled.
 
@@ -252,11 +286,24 @@ To inspect the local deployment:
 
 ```bash
 kubectl get pods -n cloudops
+kubectl get deployments -n cloudops
 kubectl get services -n cloudops
 kubectl get hpa -n cloudops
 ```
 
-Argo CD is used to manage synchronization between GitHub and the local Kubernetes cluster.
+To inspect the Argo CD application:
+
+```bash
+kubectl get application cloudops-platform -n argocd
+```
+
+To verify the backend container image:
+
+```bash
+kubectl get deployment backend -n cloudops -o jsonpath="{.spec.template.spec.containers[0].image}"
+```
+
+Argo CD manages synchronization between GitHub and the local Kubernetes cluster.
 
 The Sealed Secrets controller must be installed and configured with the appropriate encryption keys before restoring encrypted application credentials.
 
@@ -272,8 +319,8 @@ Additional technical documentation is available in:
 The following improvements are planned:
 
 - Automated GitOps synchronization with appropriate safety controls
-- Container image publishing to a registry
-- Improved image versioning and deployment automation
+- Automated container image updates in Kubernetes manifests
+- Improved image versioning and release management
 - Centralized logging with Loki
 - Additional Kubernetes security controls
 - PostgreSQL backup automation
@@ -284,7 +331,17 @@ AWS deployment remains a future option. Terraform configurations are maintained 
 
 ## Project Status
 
-The local Kubernetes deployment, monitoring stack, CI pipeline, GitOps workflow, and Sealed Secrets integration have been implemented and tested.
+The following components have been implemented and tested:
+
+- Containerized FastAPI and PostgreSQL application
+- Local Kubernetes deployment
+- Monitoring with Prometheus and Grafana
+- Automated CI testing and Docker builds
+- Container vulnerability scanning with Trivy
+- Container image publishing to GHCR
+- GitOps deployment management with Argo CD
+- Deployment of versioned GHCR images to Kubernetes
+- Encrypted secrets management with Bitnami Sealed Secrets
 
 Terraform-based AWS infrastructure definitions have been validated locally but not deployed.
 
