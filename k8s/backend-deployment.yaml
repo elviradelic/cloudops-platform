@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/elviradelic/cloudops-platform/cloudops-backend:7642be990eded03c75a8de74229abd56c43c2f7c
+          image: ghcr.io/elviradelic/cloudops-platform/cloudops-backend:908a0c4ed4cee56f24ffa4ee17615346ecea1f27
           imagePullPolicy: IfNotPresent
 
           ports:
