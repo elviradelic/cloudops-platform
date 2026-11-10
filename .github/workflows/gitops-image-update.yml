@@ -1,0 +1,97 @@
+
+name: GitOps Image Update
+
+on:
+  workflow_run:
+    workflows:
+      - Backend CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-image:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Verify published image
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/cloudops-backend:${IMAGE_SHA}"
+          docker manifest inspect "$IMAGE" > /dev/null
+          echo "Verified published image: $IMAGE"
+
+      - name: Update Kubernetes image tag
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("k8s/backend-deployment.yaml")
+          content = path.read_text()
+
+          image = (
+              f"ghcr.io/{os.environ['GITHUB_REPOSITORY'].lower()}"
+              f"/cloudops-backend:{os.environ['IMAGE_SHA']}"
+          )
+
+          pattern = (
+              r"(?m)^(\s*image:\s*)"
+              r"ghcr\.io/elviradelic/cloudops-platform/"
+              r"cloudops-backend:[^\s]+$"
+          )
+
+          updated, count = re.subn(
+              pattern,
+              lambda match: match.group(1) + image,
+              content,
+          )
+
+          if count != 1:
+              raise SystemExit(
+                  f"Expected one backend image, found {count}"
+              )
+
+          path.write_text(updated)
+          print(f"Updated backend image to {image}")
+          PY
+
+      - name: Create deployment pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/backend-image-update
+          base: main
+          delete-branch: true
+          commit-message: "gitops: update backend image"
+          title: "gitops: update backend image"
+          body: |
+            Automated GitOps image update.
+
+            This pull request updates the Kubernetes backend
+            image to the SHA published by Backend CI.
+
+            Review the manifest change and wait for required
+            CI checks before merging.
+
+            Argo CD synchronization remains manual.
+          add-paths: |
+            k8s/backend-deployment.yaml
